@@ -9,6 +9,22 @@ const expenseSchema = new mongoose.Schema(
         category: {
             type: String,
             required: true,
+            enum: [
+                "Food",
+                "Travel",
+                "Shopping",
+                "Bills",
+                "School",
+                "Electronics",
+                "Grocery",
+                "Tools",
+                "Entertainment",
+                "Health",
+                "Other",
+            ]
+        },
+        customCategory: {
+            type: String,
             trim: true,
         },
         note: {
@@ -23,7 +39,11 @@ const expenseSchema = new mongoose.Schema(
             type: mongoose.Schema.Types.ObjectId,
             ref: "User",
             required: true,
-        }
+        },
+        expenseDate: {
+            type: Date,
+            required: true,
+        },
     },
      {
     timestamps: true,
