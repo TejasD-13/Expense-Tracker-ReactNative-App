@@ -43,14 +43,69 @@ router.post('/', authMiddleware, async (req, res) => {
 router.get("/", authMiddleware, async (req, res) => {
     try {
         const splits = await SplitExpense.find({
-            "participants.user": req.userId,
+            $or: [
+                { paidBy: req.userId },
+                { "participants.user": req.userId }
+            ]
         })
+            .sort({ createdAt: -1 })
             .populate("paidBy", "name email")
             .populate("participants.user", "name email");
 
         res.json(splits);
     } catch (err) {
+        console.error("FETCH SPLITS ERROR:", err);
         res.status(500).json({ message: "Server error" });
+    }
+});
+
+router.get("/balance", authMiddleware, async (req, res) => {
+    try {
+        const splits = await SplitExpense.find({
+            $or: [
+                { paidBy: req.userId },
+                { "participants.user": req.userId }
+            ]
+        }).populate("paidBy participants.user", "name email");
+
+        const balanceMap = {};
+
+        splits.forEach((split) => {
+            const paidBy = split.paidBy._id.toString();
+
+            split.participants.forEach(participant => {
+                const participantId = participant.user._id.toString();
+                const share = participant.share;
+
+                // Case 1: Current user paid
+                if (paidBy === req.userId) {
+                    if (participantId === req.userId) return; // Skip self
+
+                    if (!balanceMap[participantId]) {
+                        balanceMap[participantId] = {
+                            user: participant.user,
+                            amount: 0,
+                        };
+                    }
+                    balanceMap[participantId].amount += share;
+                }
+                // Case 2: Someone else paid and current user is a participant
+                else if (participantId === req.userId) {
+                    if (!balanceMap[paidBy]) {
+                        balanceMap[paidBy] = {
+                            user: split.paidBy,
+                            amount: 0,
+                        };
+                    }
+                    balanceMap[paidBy].amount -= share;
+                }
+            });
+        });
+
+        res.json(Object.values(balanceMap));
+    } catch (error) {
+        console.error("BALANCE ERROR:", error);
+        res.status(500).json({ message: "Server error." });
     }
 });
 
