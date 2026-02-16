@@ -8,7 +8,7 @@ const userSchema = new mongoose.Schema(
             trim: true,
         },
         email: {
-            type:String,
+            type: String,
             required: true,
             unique: true,
             lowercase: true,
@@ -17,6 +17,10 @@ const userSchema = new mongoose.Schema(
             type: String,
             required: true,
         },
+        friends: [{
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "User",
+        }]
     },
     {
         timestamps: true

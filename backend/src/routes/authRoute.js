@@ -8,11 +8,19 @@ router.post("/register", registerUser);
 router.post("/login", loginUser);
 
 
-router.get("/me", authMiddleware, (req, res) => {
-  res.json({
-    message: "Protected route works",
-    userId: req.userId,
-  });
+router.get("/me", authMiddleware, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId).select("-password");
+    if (!user) return res.status(404).json({ message: "User not found" });
+    res.json({
+      message: "Protected route works",
+      userId: user._id,
+      name: user.name,
+      email: user.email,
+    });
+  } catch (error) {
+    res.status(500).json({ message: "Server error" });
+  }
 });
 
 export default router;
