@@ -2,6 +2,7 @@ import express from "express";
 import authMiddleware from "../middleware/authMiddleware.js";
 import SplitExpense from "../models/SplitExpense.js";
 import User from "../models/User.js";
+import Settlement from "../models/Settlement.js";
 
 const router = express.Router();
 
@@ -60,53 +61,101 @@ router.get("/", authMiddleware, async (req, res) => {
 });
 
 router.get("/balance", authMiddleware, async (req, res) => {
-    try {
-        const splits = await SplitExpense.find({
-            $or: [
-                { paidBy: req.userId },
-                { "participants.user": req.userId }
-            ]
-        }).populate("paidBy participants.user", "name email");
+  try {
+    const splits = await SplitExpense.find({
+      $or: [
+        { paidBy: req.userId },
+        { "participants.user": req.userId }
+      ]
+    }).populate("paidBy participants.user", "name email");
 
-        const balanceMap = {};
+    const settlements = await Settlement.find({
+      $or: [
+        { from: req.userId },
+        { to: req.userId }
+      ]
+    });
 
-        splits.forEach((split) => {
-            const paidBy = split.paidBy._id.toString();
+    const balanceMap = {};
 
-            split.participants.forEach(participant => {
-                const participantId = participant.user._id.toString();
-                const share = participant.share;
+    // 🔥 Step 1: Calculate balances from splits
+    splits.forEach((split) => {
+    const paidBy = split.paidBy._id.toString();
 
-                // Case 1: Current user paid
-                if (paidBy === req.userId) {
-                    if (participantId === req.userId) return; // Skip self
+    split.participants.forEach((participant) => {
+        const participantId = participant.user._id.toString();
+        const share = participant.share;
 
-                    if (!balanceMap[participantId]) {
-                        balanceMap[participantId] = {
-                            user: participant.user,
-                            amount: 0,
-                        };
-                    }
-                    balanceMap[participantId].amount += share;
-                }
-                // Case 2: Someone else paid and current user is a participant
-                else if (participantId === req.userId) {
-                    if (!balanceMap[paidBy]) {
-                        balanceMap[paidBy] = {
-                            user: split.paidBy,
-                            amount: 0,
-                        };
-                    }
-                    balanceMap[paidBy].amount -= share;
-                }
-            });
-        });
+        if (participantId === req.userId) {
+        // If someone else paid, you owe them
+        if (paidBy !== req.userId) {
+            if (!balanceMap[paidBy]) {
+            balanceMap[paidBy] = {
+                user: split.paidBy,
+                amount: 0,
+            };
+            }
+            balanceMap[paidBy].amount -= share;
+        }
+        } else {
+        // If you paid, they owe you
+        if (paidBy === req.userId) {
+            if (!balanceMap[participantId]) {
+            balanceMap[participantId] = {
+                user: participant.user,
+                amount: 0,
+            };
+            }
+            balanceMap[participantId].amount += share;
+        }
+        }
+    });
+    });
 
-        res.json(Object.values(balanceMap));
-    } catch (error) {
-        console.error("BALANCE ERROR:", error);
-        res.status(500).json({ message: "Server error." });
-    }
+
+    // 🔥 Step 2: Adjust balances using settlements
+    settlements.forEach((settlement) => {
+      const from = settlement.from.toString();
+      const to = settlement.to.toString();
+      const amount = settlement.amount;
+
+      if (from === req.userId) {
+        // You paid someone
+        if (balanceMap[to]) {
+          balanceMap[to].amount += amount;
+        }
+      }
+
+      if (to === req.userId) {
+        // Someone paid you
+        if (balanceMap[from]) {
+          balanceMap[from].amount -= amount;
+        }
+      }
+    });
+
+    res.json(Object.values(balanceMap));
+  } catch (error) {
+    console.error("BALANCE ERROR:", error);
+    res.status(500).json({ message: "Server error." });
+  }
 });
+
+
+router.post("/settle", authMiddleware, async (req, res) => {
+    try {
+        const {friendId, amount} = req.body;
+
+        const settlement = await Settlement.create({
+            from: req.userId,
+            to: friendId,
+            amount
+        })
+
+        res.json(settlement);
+    } catch (error) {
+        res.status(500).json({ message: "Settlement failed." });
+    }
+})
 
 export default router;
