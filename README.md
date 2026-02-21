@@ -1,4 +1,4 @@
-# 💰 Expense Tracker - Premium Mobile App
+# 💰 Expense Tracker - Mobile App
 
 [![React Native](https://img.shields.io/badge/React_Native-0.83-61DAFB?logo=react&logoColor=black)](https://reactnative.dev/)
 [![Node.js](https://img.shields.io/badge/Node.js-20+-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
